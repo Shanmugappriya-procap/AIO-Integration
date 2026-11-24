@@ -1,0 +1,40 @@
+name: mabl cloud run to AIO Tests
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "30 3 * * 1-5"
+
+jobs:
+  mabl-to-aio:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run mabl tests and send results to AIO
+        env:
+          MABL_API_KEY: ${{ secrets.MABL_API_KEY }}
+          AIO_API_TOKEN: ${{ secrets.AIO_API_TOKEN }}
+          MABL_ENVIRONMENT_ID: ${{ vars.MABL_ENVIRONMENT_ID }}
+          MABL_APPLICATION_ID: ${{ vars.MABL_APPLICATION_ID }}
+          MABL_PLAN_IDS: ${{ vars.MABL_PLAN_IDS }}
+          MABL_PLAN_LABELS: ${{ vars.MABL_PLAN_LABELS }}
+          AIO_PROJECT_KEY: ${{ vars.AIO_PROJECT_KEY }}
+          AIO_CYCLE_KEY: ${{ vars.AIO_CYCLE_KEY }}
+        run: python scripts/mabl_to_aio.py
+
+      - name: Keep the JUnit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mabl-results
+          path: mabl-results.xml
+          if-no-files-found: ignore
