@@ -1,0 +1,64 @@
+name: mabl local run to AIO Tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      headless:
+        description: "Run Chrome without showing the window"
+        type: boolean
+        default: true
+  schedule:
+    - cron: "30 3 * * 1-5"
+
+jobs:
+  run-mabl-tests:
+    runs-on: [self-hosted, windows, mabl-local]
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run mabl tests on the local machine
+        env:
+          MABL_CLI_API_KEY: ${{ secrets.MABL_CLI_API_KEY }}
+          MABL_ENVIRONMENT_ID: ${{ vars.MABL_ENVIRONMENT_ID }}
+          MABL_APPLICATION_ID: ${{ vars.MABL_APPLICATION_ID }}
+          MABL_HEADLESS: ${{ inputs.headless != false }}
+        run: python scripts/run_mabl_local.py
+
+      - name: Hand results to the reporting job
+        uses: actions/upload-artifact@v4
+        with:
+          name: mabl-local-results
+          path: mabl-local-results.json
+
+  report-to-aio:
+    needs: run-mabl-tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: mabl-local-results
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Send results to AIO Tests
+        env:
+          AIO_API_TOKEN: ${{ secrets.AIO_API_TOKEN }}
+          AIO_PROJECT_KEY: ${{ vars.AIO_PROJECT_KEY }}
+          AIO_CYCLE_KEY: ${{ vars.AIO_CYCLE_KEY }}
+        run: python scripts/report_to_aio.py
+
+      - name: Keep the JUnit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aio-junit-report
+          path: mabl-results.xml
+          if-no-files-found: ignore
